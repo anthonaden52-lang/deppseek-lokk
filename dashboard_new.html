@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SOL Agent City — Dashboard</title>
+<style>
+  :root{
+    --bg:#060828; --bg2:#0a0e3a; --panel:#0e1540; --panel2:#131a52;
+    --line:#1f2a7a; --txt:#e8eeff; --dim:#7d8cc4;
+    --cyan:#5ee0ff; --cyan2:#2a9cc0; --cyan3:#1a6a8a;
+    --magenta:#ff2ec4; --pink:#ff7ad9;
+    --green:#3ee08a; --red:#ff4d6d; --amber:#ffb84d;
+    --glow:#5ee0ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    background:radial-gradient(1200px 800px at 50% 40%, var(--bg2) 0%, var(--bg) 70%);
+    color:var(--txt);
+    font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:8px 14px;
+    background:linear-gradient(180deg, rgba(14,21,64,.95) 0%, rgba(10,14,58,.85) 100%);
+    border-bottom:1px solid var(--line);
+    backdrop-filter:blur(8px);
+    flex-shrink:0;
+    position:relative;z-index:10;
+  }
+  .brand{
+    display:flex;align-items:center;gap:8px;
+    font-size:12px;letter-spacing:.15em;text-transform:uppercase;
+    color:#b8c8ff;font-weight:600;
+  }
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);box-shadow:0 0 8px currentColor}
+  .brand .dot.on{background:var(--green);animation:pulse 2s infinite}
+  .brand .dot.err{background:var(--red)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(62,224,138,.6)}70%{box-shadow:0 0 0 10px rgba(62,224,138,0)}100%{box-shadow:0 0 0 0 rgba(62,224,138,0)}}
+
+  .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:4px 9px;border-radius:6px;
+    background:rgba(94,224,255,.06);
+    border:1px solid rgba(94,224,255,.25);
+    font-size:10.5px;color:#cfe0ff;
+    white-space:nowrap;
+  }
+  .chip b{color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+  .chip.g{border-color:rgba(62,224,138,.4);background:rgba(62,224,138,.08)}
+  .chip.g b{color:var(--green)}
+  .chip.r{border-color:rgba(255,77,109,.4);background:rgba(255,77,109,.08)}
+  .chip.r b{color:var(--red)}
+  .chip.w{border-color:rgba(255,184,77,.4);background:rgba(255,184,77,.08)}
+  .chip.w b{color:var(--amber)}
+
+  .sim-counter{
+    display:flex;align-items:baseline;gap:8px;
+    padding:6px 12px;border-radius:8px;
+    background:linear-gradient(135deg, rgba(255,46,196,.14), rgba(94,224,255,.10));
+    border:1px solid rgba(255,46,196,.35);
+    font-size:11px;color:#ffb8ec;letter-spacing:.08em;text-transform:uppercase;
+    flex-shrink:0;
+  }
+  .sim-counter b{font-size:18px;color:#fff;font-weight:700;letter-spacing:0;font-variant-numeric:tabular-nums}
+  .sim-counter .up{color:var(--green)}
+  .sim-counter .dn{color:var(--red)}
+
+  .tools{display:flex;gap:6px;align-items:center;flex-shrink:0}
+  select,button{
+    font:inherit;color:var(--txt);background:var(--panel);
+    border:1px solid var(--line);border-radius:6px;padding:5px 9px;cursor:pointer;font-size:11px;
+  }
+  select:hover,button:hover{border-color:var(--cyan);color:#fff}
+  button:active{transform:translateY(1px)}
+
+  /* ---------- tabs ---------- */
+  .tabs{
+    display:flex;gap:0;background:rgba(10,14,58,.7);border-bottom:1px solid var(--line);
+    flex-shrink:0;padding:0 14px;
+  }
+  .tabs button{
+    background:transparent;border:none;border-radius:0;
+    padding:9px 18px;color:var(--dim);
+    border-bottom:2px solid transparent;
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;
+  }
+  .tabs button.on{color:var(--cyan);border-bottom-color:var(--cyan);text-shadow:0 0 8px rgba(94,224,255,.6)}
+
+  /* ---------- views ---------- */
+  .view{display:none;flex:1;min-height:0;position:relative}
+  .view.active{display:flex;flex-direction:column}
+  #cityView{background:
+    radial-gradient(ellipse at 50% 100%, rgba(255,46,196,.20) 0%, transparent 60%),
+    radial-gradient(ellipse at 50% 0%, rgba(94,224,255,.12) 0%, transparent 55%),
+    linear-gradient(180deg, var(--bg) 0%, #1a083a 100%);
+  }
+  #cityCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+
+  .tooltip{
+    position:absolute;pointer-events:none;
+    background:rgba(6,8,40,.95);
+    border:1px solid var(--cyan);
+    box-shadow:0 0 16px rgba(94,224,255,.4);
+    padding:8px 11px;border-radius:6px;
+    font-size:11px;color:#e8eeff;
+    transform:translate(-50%,-100%);
+    white-space:nowrap;
+    opacity:0;transition:opacity .12s;
+    z-index:5;
+  }
+  .tooltip.on{opacity:1}
+  .tooltip .sym{font-weight:700;color:#fff;font-size:12px;letter-spacing:.05em}
+  .tooltip .row{display:flex;justify-content:space-between;gap:14px;margin-top:3px}
+  .tooltip .row span:first-child{color:var(--dim)}
+  .tooltip .g{color:var(--green)}.tooltip .r{color:var(--red)}
+
+  .hud{
+    position:absolute;top:12px;left:14px;
+    font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;
+    pointer-events:none;
+  }
+  .hud b{color:var(--cyan);font-weight:600}
+  .hudline{color:#7d8cc4;margin-top:2px;letter-spacing:.05em;text-transform:none;font-size:10.5px}
+
+  /* ---------- data tab ---------- */
+  #dataView{overflow:auto;background:var(--bg);padding:14px 14px 40px}
+  .grid{
+    display:grid;gap:12px;
+    grid-template-columns:repeat(auto-fit,minmax(360px,1fr));
+  }
+  .card{
+    background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%);
+    border:1px solid var(--line);border-radius:10px;padding:12px;
+    min-width:0;display:flex;flex-direction:column;gap:10px;
+  }
+  .card.wide{grid-column:1/-1}
+  .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .card-h h2{margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a8b8f0}
+  .hint{font-size:10px;color:var(--dim)}
+  .tablewrap{overflow:auto;max-height:48vh;border:1px solid var(--line);border-radius:8px}
+  table{border-collapse:collapse;width:100%;font-size:11.5px;white-space:nowrap}
+  thead th{
+    position:sticky;top:0;background:#0b1140;color:var(--dim);
+    font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;text-align:right;
+    padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;
+  }
+  thead th:first-child,tbody td:first-child{text-align:left}
+  thead th.sorted{color:var(--cyan)}
+  tbody td{padding:6px 10px;text-align:right;border-bottom:1px solid #131a52;font-variant-numeric:tabular-nums}
+  tbody tr:hover{background:#131a52}
+  .sym{font-weight:700;letter-spacing:.03em;color:#e0e8ff}
+  .good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--amber)}.dim{color:var(--dim)}
+  .chart{width:100%;height:230px;display:block}
+  #impactChart{height:260px}
+  .issues{margin:0;padding-left:18px;color:var(--amber);font-size:11px;display:flex;flex-direction:column;gap:4px}
+  .issues li.ok{color:var(--green)}
+
+  .banner{
+    margin:10px 14px 0;padding:10px 12px;border-radius:8px;
+    border:1px solid var(--amber);background:rgba(255,184,77,.08);color:#ffd48a;font-size:11.5px;
+  }
+  .banner code{background:#00000050;padding:1px 5px;border-radius:4px}
+  .banner.hidden{display:none}
+
+  body.present .tools{display:none}
+  body.present .topbar{padding:10px 14px}
+</style>
+</head>
+<body>
+
+<div class="banner hidden" id="banner"></div>
+
+<header class="topbar">
+  <div class="brand"><span class="dot" id="liveDot"></span><span>AGENT CITY</span></div>
+  <div class="chips" id="chips"></div>
+  <div class="sim-counter" id="simCounter">SIM <b>$0.00</b></div>
+  <div class="tools">
+    <select id="datasetSel" title="Which market file drives the view"></select>
+    <button id="btnReload">⟳</button>
+    <button id="btnPresent" title="Hide controls">◎</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button data-tab="city" class="on">City</button>
+  <button data-tab="data">Data</button>
+</div>
+
+<div class="view city active" id="cityView">
+  <div class="hud">
+    <div>ISOMETRIC MARKET MAP · <b id="hudTokens">0</b> BUILDINGS</div>
+    <div class="hudline" id="hudLine">Loading data…</div>
+  </div>
+  <canvas id="cityCanvas"></canvas>
+  <div class="tooltip" id="tooltip"></div>
+</div>
+
+<div class="view data" id="dataView">
+  <div class="grid">
+    <section class="card wide">
+      <div class="card-h"><h2>Market Watch</h2><span class="hint" id="mktHint"></span></div>
+      <div class="tablewrap"><table id="mktTable"></table></div>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Normalized Price Action</h2><span class="hint">% from first observation</span></div>
+      <canvas id="priceChart" class="chart"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="card-h"><h2>Simulated Price Impact</h2><span class="hint">0.045 SOL probes</span></div>
+      <canvas id="impactChart" class="chart"></canvas>
+    </section>
+
+    <section class="card wide">
+      <div class="card-h"><h2>Sim Quotes</h2><span class="hint" id="simHint"></span></div>
+      <div class="tablewrap"><table id="simTable"></table></div>
+    </section>
+
+    <section class="card wide">
+      <div class="card-h"><h2>Data Quality</h2><span class="hint">schema · coverage · nulls · duplicates</span></div>
+      <div class="tablewrap"><table id="dqTable"></table></div>
+      <ul class="issues" id="dqIssues"></ul>
+    </section>
+  </div>
+</div>
+
+<script>
+/* ============ helpers ============ */
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+const fmtUSD = n => {
+  if (n == null) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toFixed(2);
+};
+const fmtPrice = n => {
+  if (n == null) return '—';
+  if (n >= 1)     return '$' + n.toFixed(4);
+  if (n >= 0.001) return '$' + n.toFixed(6);
+  return '$' + n.toExponential(3);
+};
+const fmtPct = n => n == null ? '—' : (n>=0?'+':'') + n.toFixed(2) + '%';
+const fmtNum = n => n == null ? '—' : n.toLocaleString('en-US');
+const fmtTime = ms => ms == null ? '—' : new Date(ms).toISOString().replace('T',' ').slice(0,19);
+const pctClass = n => n == null ? 'dim' : (n >= 0 ? 'good' : 'bad');
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+
+function parseCSV(text) {
+  const rows=[]; let row=[], field='', inQ=false;
+  for (let i=0;i<text.length;i++){
+    const c=text[i];
+    if (inQ){
+      if (c==='"'){ if (text[i+1]==='"'){field+='"';i++;} else inQ=false; }
+      else field+=c;
+    } else {
+      if (c==='"') inQ=true;
+      else if (c===','){row.push(field);field='';}
+      else if (c==='\n'){row.push(field);rows.push(row);row=[];field='';}
+      else if (c!=='\r') field+=c;
+    }
+  }
+  if (field!==''||row.length){row.push(field);rows.push(row);}
+  if (!rows.length) return [];
+  const header=rows.shift().map(h=>h.trim());
+  return rows.filter(r=>r.length>1||(r[0]||'').trim()!=='').map(r=>{
+    const o={}; header.forEach((h,i)=>o[h]=(r[i]??'').trim()); return o;
+  });
+}
+
+/* ============ state ============ */
+const FILE_LIST = ['market.csv','market_clean.csv','market_original_corrupt.csv','sim_quotes.csv'];
+const DATA = {};
+let lastSnap = [];
+
+/* ============ loading ============ */
+async function loadAll(showErrors=true){
+  let ok=0;
+  await Promise.all(FILE_LIST.map(async f=>{
+    try {
+      const res = await fetch(f + '?t=' + Date.now(), {cache:'no-store'});
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      DATA[f] = parseCSV(await res.text());
+      ok++;
+    } catch(e){ if (!DATA[f]) DATA[f] = null; }
+  }));
+  if (ok===0 && showErrors) {
+    showBanner('Could not fetch CSVs. Run <code>python -m http.server 8000</code> in this folder and open <code>http://localhost:8000/dashboard.html</code>, or drag &amp; drop the 4 CSV files anywhere on this page.');
+  } else hideBanner();
+  setDot(ok===0 ? 'err' : 'on');
+  rebuild();
+}
+function showBanner(h){ const b=$('#banner'); b.innerHTML=h; b.classList.remove('hidden'); }
+function hideBanner(){ $('#banner').classList.add('hidden'); }
+function setDot(s){ $('#liveDot').className = 'dot ' + s; }
+
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault(); document.body.style.outline='2px dashed #5ee0ff';}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault(); document.body.style.outline='none';}));
+document.addEventListener('drop', async e=>{
+  const files = Array.from(e.dataTransfer.files||[]);
+  if (!files.length) return;
+  for (const f of files){ DATA[f.name] = parseCSV(await f.text()); }
+  hideBanner(); setDot('on'); rebuild();
+});
+
+/* ============ normalization ============ */
+function normalizeMarket(rows){
+  if (!rows) return [];
+  return rows.map(r=>({
+    t:      new Date(r.timestamp).getTime(),
+    symbol: r.symbol,
+    price:  num(r.price_usd),
+    liq:    num(r.liquidity_usd),
+    vol24:  num(r.volume_24h),
+    vol5:   num(r.volume_5m),
+    chg5:   num(r.price_change_5m),
+    chg1h:  num(r.price_change_1h),
+    txns:   num(r.txns_24h),
+    mc:     num(r.market_cap),
+    fdv:    num(r.fdv),
+    dex:    r.dex || '',
+    src:    r.source || r.dex || '',
+  })).filter(r=>r.symbol);
+}
+function normalizeSim(rows){ return rows ? rows.filter(r=>r.symbol) : []; }
+function snapshot(rows){
+  const m = new Map();
+  for (const r of rows){
+    let s = m.get(r.symbol);
+    if (!s){ s = {symbol:r.symbol, t:0}; m.set(r.symbol, s); }
+    for (const k of ['price','liq','vol24','vol5','chg5','chg1h','txns','mc','fdv'])
+      if (r[k] != null) s[k] = r[k];
+    if (r.t >= s.t){ s.t = r.t; s.dex = r.dex; s.src = r.src; }
+  }
+  return Array.from(m.values());
+}
+function history(rows){
+  const m = new Map();
+  for (const r of rows){
+    if (r.price == null) continue;
+    if (!m.has(r.symbol)) m.set(r.symbol, []);
+    m.get(r.symbol).push({t:r.t, v:r.price});
+  }
+  for (const arr of m.values()) arr.sort((a,b)=>a.t-b.t);
+  return m;
+}
+
+/* ============ chips + sim counter ============ */
+function renderChips(snap, sim){
+  const liq = snap.reduce((a,s)=>a+(s.liq||0),0);
+  const vol24 = snap.reduce((a,s)=>a+(s.vol24||0),0);
+  const chgs = snap.map(s=>s.chg5).filter(v=>v!=null);
+  const avg5 = chgs.length ? chgs.reduce((a,b)=>a+b,0)/chgs.length : null;
+  const newest = snap.reduce((a,s)=>Math.max(a, s.t||0), 0);
+  const ageS = newest ? Math.round((Date.now()-newest)/1000) : null;
+  const live = ageS != null && ageS < 300;
+
+  const chip = (label, value, cls='') =>
+    `<span class="chip ${cls}">${label} <b>${value}</b></span>`;
+
+  $('#chips').innerHTML = [
+    chip('TOKENS', snap.length),
+    chip('LIQ', fmtUSD(liq)),
+    chip('24H VOL', fmtUSD(vol24)),
+    chip('5M AVG', fmtPct(avg5), avg5 == null ? '' : (avg5 >= 0 ? 'g' : 'r')),
+    chip('FEED', live ? 'LIVE' : 'STALE', live ? 'g' : 'w'),
+    chip('SIM', sim.length + ' probes'),
+  ].join('');
+
+  // Sim counter = sum of usd_out (total received value across all simulated probes)
+  const totalOut = sim.reduce((a,r)=>a+(num(r.usd_out)||0),0);
+  const totalIn  = sim.reduce((a,r)=>a+(num(r.usd_in)||0),0);
+  const net = totalOut - totalIn;
+  $('#simCounter').innerHTML =
+    `SIM NET <b class="${net>=0?'up':'dn'}">${net>=0?'+':''}$${Math.abs(net).toFixed(2)}</b>`;
+}
+
+/* ============ CITY (canvas isometric) ============ */
+const TILE_W = 92, TILE_H = 46;
+const GRID = 5;
+const cityCanvas = $('#cityCanvas');
+let cityState = { hover:null, anim:0, buildings:[] };
+
+function isoProject(gx, gy, originX, originY){
+  return {
+    x: originX + (gx - gy) * TILE_W/2,
+    y: originY + (gx + gy) * TILE_H/2,
+  };
+}
+
+function drawDiamond(ctx, cx, cy, w, h, fill, stroke){
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h/2);
+  ctx.lineTo(cx + w/2, cy);
+  ctx.lineTo(cx, cy + h/2);
+  ctx.lineTo(cx - w/2, cy);
+  ctx.closePath();
+  if (fill){ ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+function drawBuilding(ctx, cx, cy, H, colors, glow, pulse){
+  const hw = TILE_W * 0.32;   // half-width of building footprint
+  const hh = TILE_H * 0.32;   // half-height
+
+  // building base corners (footprint diamond)
+  const bTop    = {x:cx,       y:cy - hh};
+  const bRight  = {x:cx + hw,  y:cy};
+  const bBottom = {x:cx,       y:cy + hh};
+  const bLeft   = {x:cx - hw,  y:cy};
+
+  // top corners (lifted by H)
+  const tTop    = {x:cx,       y:cy - hh - H};
+  const tRight  = {x:cx + hw,  y:cy - H};
+  const tBottom = {x:cx,       y:cy + hh - H};
+  const tLeft   = {x:cx - hw,  y:cy - H};
+
+  // glow behind building
+  if (glow > 0 || pulse){
+    const g = ctx.createRadialGradient(cx, cy - H*0.4, 2, cx, cy - H*0.4, Math.max(40, H*1.4));
+    const alpha = clamp(0.35 + glow*0.25 + (pulse?0.2:0), 0, 0.85);
+    g.addColorStop(0, `rgba(${colors.r},${colors.g},${colors.b},${alpha})`);
+    g.addColorStop(1, `rgba(${colors.r},${colors.g},${colors.b},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy - H*0.4, Math.max(40, H*1.4), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // left face (front-left, SW facing)
+  ctx.beginPath();
+  ctx.moveTo(bLeft.x,  bLeft.y);
+  ctx.lineTo(bBottom.x, bBottom.y);
+  ctx.lineTo(tBottom.x, tBottom.y);
+  ctx.lineTo(tLeft.x,  tLeft.y);
+  ctx.closePath();
+  const gL = ctx.createLinearGradient(bLeft.x, tTop.y, bBottom.x, bBottom.y);
+  gL.addColorStop(0, colors.leftHi);
+  gL.addColorStop(1, colors.leftLo);
+  ctx.fillStyle = gL;
+  ctx.fill();
+
+  // right face (front-right, SE facing)
+  ctx.beginPath();
+  ctx.moveTo(bBottom.x, bBottom.y);
+  ctx.lineTo(bRight.x,  bRight.y);
+  ctx.lineTo(tRight.x,  tRight.y);
+  ctx.lineTo(tBottom.x, tBottom.y);
+  ctx.closePath();
+  const gR = ctx.createLinearGradient(bBottom.x, tTop.y, bRight.x, bRight.y);
+  gR.addColorStop(0, colors.rightHi);
+  gR.addColorStop(1, colors.rightLo);
+  ctx.fillStyle = gR;
+  ctx.fill();
+
+  // top face
+  ctx.beginPath();
+  ctx.moveTo(tTop.x,    tTop.y);
+  ctx.lineTo(tRight.x,  tRight.y);
+  ctx.lineTo(tBottom.x, tBottom.y);
+  ctx.lineTo(tLeft.x,   tLeft.y);
+  ctx.closePath();
+  ctx.fillStyle = colors.top;
+  ctx.fill();
+  ctx.strokeStyle = colors.edge;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // windows (rows of small glowing dots on the faces)
+  ctx.fillStyle = colors.window;
+  for (let i=1;i<H-6;i+=7){
+    ctx.globalAlpha = 0.7;
+    // left face windows
+    const lx = (bLeft.x + bBottom.x)/2 - (hw*0.15) + (i / H) * (tLeft.x - bLeft.x) * 0.15;
+    // (simplified: draw grid of dots along the face normal direction)
+  }
+  ctx.globalAlpha = 1;
+
+  return { tTop, tRight, tBottom, tLeft };
+}
+
+function drawCity(snap){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cityCanvas.getBoundingClientRect();
+  cityCanvas.width  = Math.max(1, Math.round(rect.width  * dpr));
+  cityCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+  const ctx = cityCanvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+
+  const w = rect.width, h = rect.height;
+  const originX = w/2;
+  const originY = h/2 - 40;
+
+  // pick tokens sorted by liquidity; place biggest near center
+  const sorted = snap.slice().sort((a,b)=>(b.liq||0)-(a.liq||0)).slice(0, GRID*GRID);
+
+  const cx = Math.floor(GRID/2), cy = Math.floor(GRID/2);
+  const slots = [];
+  for (let y=0;y<GRID;y++) for (let x=0;x<GRID;x++)
+    slots.push({x, y, d: Math.abs(x-cx) + Math.abs(y-cy)});
+  slots.sort((a,b)=>a.d-b.d);
+
+  const maxLiq = Math.max(...sorted.map(s=>s.liq||0), 1);
+  const buildings = [];
+
+  sorted.forEach((tok, i)=>{
+    const slot = slots[i];
+    if (!slot) return;
+    const heightScale = 70;
+    const norm = Math.log10(1 + (tok.liq||0)) / Math.log10(1 + maxLiq);
+    const H = 22 + norm * heightScale;
+
+    // color based on 5m change
+    const chg = tok.chg5 || 0;
+    let hue;
+    if (chg > 1)         hue = {r:62, g:224, b:138};   // green
+    else if (chg > 0)    hue = {r:94, g:224, b:255};   // cyan
+    else if (chg > -1)   hue = {r:255, g:184, b:77};   // amber
+    else                 hue = {r:255, g:77, b:109};   // red
+
+    const colors = {
+      top:     `rgb(${hue.r}, ${hue.g}, ${hue.b})`,
+      leftHi:  `rgba(${hue.r*0.55|0}, ${hue.g*0.55|0}, ${hue.b*0.55|0}, 1)`,
+      leftLo:  `rgba(${hue.r*0.22|0}, ${hue.g*0.22|0}, ${hue.b*0.22|0}, 1)`,
+      rightHi: `rgba(${hue.r*0.4|0}, ${hue.g*0.4|0}, ${hue.b*0.4|0}, 1)`,
+      rightLo: `rgba(${hue.r*0.15|0}, ${hue.g*0.15|0}, ${hue.b*0.15|0}, 1)`,
+      edge:    `rgba(${hue.r}, ${hue.g}, ${hue.b}, 0.9)`,
+      window:  '#ffffff',
+    };
+    const pulse = chg > 2 || chg < -2;
+    const pos = isoProject(slot.x, slot.y, originX, originY);
+    buildings.push({ tok, slot, pos, H, colors, pulse, hue });
+  });
+
+  // sort back-to-front so nearer buildings are drawn over further ones
+  buildings.sort((a,b)=> (a.slot.x + a.slot.y) - (b.slot.x + b.slot.y));
+
+  // draw ground tiles (grid) first
+  for (let y=0;y<GRID;y++){
+    for (let x=0;x<GRID;x++){
+      const p = isoProject(x, y, originX, originY);
+      const on = buildings.some(b=>b.slot.x===x && b.slot.y===y);
+      const fill = on ? 'rgba(30, 20, 90, 0.85)' : 'rgba(18, 12, 60, 0.55)';
+      drawDiamond(ctx, p.x, p.y, TILE_W, TILE_H, fill, 'rgba(94,224,255,0.12)');
+    }
+  }
+
+  // grid "roads" — glowing pink edges between tiles
+  ctx.strokeStyle = 'rgba(255,46,196,0.35)';
+  ctx.lineWidth = 1.5;
+  for (let i=0;i<=GRID;i++){
+    const a1 = isoProject(0, i, originX, originY);
+    const a2 = isoProject(GRID, i, originX, originY);
+    ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.stroke();
+    const b1 = isoProject(i, 0, originX, originY);
+    const b2 = isoProject(i, GRID, originX, originY);
+    ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.stroke();
+  }
+
+  // draw buildings back-to-front
+  buildings.forEach(b=>{
+    const corners = drawBuilding(ctx, b.pos.x, b.pos.y, b.H, b.colors, 0.6, b.pulse);
+    // draw a light "beacon" above the building
+    const beaconTop = {x: corners.tTop.x, y: corners.tTop.y - 22};
+    ctx.strokeStyle = `rgba(${b.hue.r}, ${b.hue.g}, ${b.hue.b}, 0.7)`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(corners.tTop.x, corners.tTop.y); ctx.lineTo(beaconTop.x, beaconTop.y); ctx.stroke();
+
+    // bright point
+    ctx.fillStyle = `rgba(${b.hue.r}, ${b.hue.g}, ${b.hue.b}, 1)`;
+    ctx.beginPath(); ctx.arc(beaconTop.x, beaconTop.y, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.shadowColor = `rgba(${b.hue.r}, ${b.hue.g}, ${b.hue.b}, 0.9)`;
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(beaconTop.x, beaconTop.y, 2, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // label above
+    const labelY = beaconTop.y - 8;
+    ctx.font = '600 11px ui-monospace,Menlo,Consolas,monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    // bg pill
+    const label = b.tok.symbol;
+    const tw = ctx.measureText(label).width + 12;
+    ctx.fillStyle = 'rgba(6,8,40,0.85)';
+    ctx.beginPath();
+    const lx = corners.tTop.x;
+    const r = 3;
+    ctx.moveTo(lx - tw/2 + r, labelY - 13);
+    ctx.lineTo(lx + tw/2 - r, labelY - 13);
+    ctx.quadraticCurveTo(lx + tw/2, labelY - 13, lx + tw/2, labelY - 13 + r);
+    ctx.lineTo(lx + tw/2, labelY - r);
+    ctx.quadraticCurveTo(lx + tw/2, labelY, lx + tw/2 - r, labelY);
+    ctx.lineTo(lx - tw/2 + r, labelY);
+    ctx.quadraticCurveTo(lx - tw/2, labelY, lx - tw/2, labelY - r);
+    ctx.lineTo(lx - tw/2, labelY - 13 + r);
+    ctx.quadraticCurveTo(lx - tw/2, labelY - 13, lx - tw/2 + r, labelY - 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${b.hue.r}, ${b.hue.g}, ${b.hue.b}, 0.7)`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, lx, labelY - 2);
+
+    // store for hover
+    b.labelBox = {x: lx, y: labelY - 13, w: tw, h: 13};
+  });
+
+  // connection lines between biggest (center) and hot tokens
+  if (buildings.length){
+    const center = buildings.find(b => b.slot.x===cx && b.slot.y===cy) || buildings[0];
+    const hot = buildings.filter(b => (b.tok.chg5||0) > 0.5 && b !== center).slice(0, 4);
+    ctx.setLineDash([5, 5]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(94,224,255,0.35)';
+    for (const b of hot){
+      ctx.beginPath();
+      ctx.moveTo(center.pos.x, center.pos.y - center.H);
+      ctx.lineTo(b.pos.x, b.pos.y - b.H);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  cityState.buildings = buildings;
+  $('#hudTokens').textContent = buildings.length;
+  $('#hudLine').textContent = sorted.length
+    ? `Top by liquidity · colored by 5m change · hover a building for details`
+    : 'No market data yet — start collector.py or load CSVs.';
+}
+
+/* hover */
+cityCanvas.addEventListener('mousemove', e=>{
+  const r = cityCanvas.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  let hit = null;
+  for (const b of cityState.buildings){
+    const bb = b.labelBox;
+    if (bb && x >= bb.x - bb.w/2 && x <= bb.x + bb.w/2 && y >= bb.y && y <= bb.y + bb.h){
+      hit = b; break;
+    }
+  }
+  const tip = $('#tooltip');
+  if (hit){
+    const t = hit.tok;
+    tip.innerHTML =
+      `<div class="sym">${t.symbol}</div>` +
+      `<div class="row"><span>Price</span><span>${fmtPrice(t.price)}</span></div>` +
+      `<div class="row"><span>5m</span><span class="${pctClass(t.chg5)}">${fmtPct(t.chg5)}</span></div>` +
+      `<div class="row"><span>1h</span><span class="${pctClass(t.chg1h)}">${fmtPct(t.chg1h)}</span></div>` +
+      `<div class="row"><span>Liquidity</span><span>${fmtUSD(t.liq)}</span></div>` +
+      `<div class="row"><span>24h Vol</span><span>${fmtUSD(t.vol24)}</span></div>` +
+      `<div class="row"><span>Txns</span><span>${fmtNum(t.txns)}</span></div>`;
+    tip.style.left = x + 'px';
+    tip.style.top = (y - 8) + 'px';
+    tip.classList.add('on');
+  } else tip.classList.remove('on');
+});
+cityCanvas.addEventListener('mouseleave', ()=>$('#tooltip').classList.remove('on'));
+
+/* ============ data tab (unchanged) ============ */
+const COLS = [
+  {k:'symbol', label:'Symbol',    get:s=>s.symbol},
+  {k:'price',  label:'Price',     get:s=>s.price},
+  {k:'chg5',   label:'5m %',      get:s=>s.chg5, pct:true},
+  {k:'chg1h',  label:'1h %',      get:s=>s.chg1h, pct:true},
+  {k:'liq',    label:'Liquidity', get:s=>s.liq},
+  {k:'vol24',  label:'Vol 24h',   get:s=>s.vol24},
+  {k:'mc',     label:'Mkt Cap',   get:s=>s.mc},
+  {k:'txns',   label:'Txns',      get:s=>s.txns},
+];
+let sortKey='liq', sortDir=-1;
+
+function sparkline(points, w=92, h=24){
+  if (!points || points.length < 2) return '<span class="dim">·</span>';
+  const vs = points.map(p=>p.v);
+  const min = Math.min(...vs), max = Math.max(...vs), rng = (max-min)||1;
+  const up = vs[vs.length-1] >= vs[0];
+  const color = up ? '#3ee08a' : '#ff4d6d';
+  const d = points.map((p,i)=>{
+    const x = (i/(points.length-1))*w;
+    const y = h - ((p.v-min)/rng)*(h-4) - 2;
+    return (i?'L':'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+}
+
+function renderMarketTable(snap, hist){
+  const sorted = snap.slice().sort((a,b)=>{
+    const col = COLS.find(c=>c.k===sortKey);
+    if (!col) return 0;
+    const av = col.get(a), bv = col.get(b);
+    if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+    return ((av ?? -Infinity) - (bv ?? -Infinity)) * sortDir;
+  });
+  const head = COLS.map(c=>`<th data-k="${c.k}" class="${c.k===sortKey?'sorted':''}">${c.label}${c.k===sortKey?(sortDir>0?' ▲':' ▼'):''}</th>`).join('') + '<th>Trend</th><th>Src</th>';
+  const body = sorted.map(s=>{
+    const h = hist.get(s.symbol) || [];
+    return `<tr>
+      <td class="sym">${s.symbol}</td>
+      <td>${fmtPrice(s.price)}</td>
+      <td class="${pctClass(s.chg5)}">${fmtPct(s.chg5)}</td>
+      <td class="${pctClass(s.chg1h)}">${fmtPct(s.chg1h)}</td>
+      <td>${fmtUSD(s.liq)}</td>
+      <td>${fmtUSD(s.vol24)}</td>
+      <td>${fmtUSD(s.mc)}</td>
+      <td>${fmtNum(s.txns)}</td>
+      <td>${sparkline(h)}</td>
+      <td class="dim">${s.src || '—'}</td>
+    </tr>`;
+  }).join('');
+  const table = $('#mktTable');
+  table.innerHTML = `<thead><tr>${head}</tr></thead><tbody>${body}</tbody>`;
+  $$('#mktTable thead th[data-k]').forEach(th=>{
+    th.onclick = ()=>{
+      const k = th.dataset.k;
+      if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = -1; }
+      renderMarketTable(snap, hist);
+    };
+  });
+  const newest = snap.reduce((a,s)=>Math.max(a, s.t||0), 0);
+  $('#mktHint').textContent = `${sorted.length} symbols · last tick ${fmtTime(newest)} UTC`;
+}
+
+function fitCanvas(c){
+  const dpr = window.devicePixelRatio || 1;
+  const r = c.getBoundingClientRect();
+  c.width = Math.max(1, Math.round(r.width * dpr));
+  c.height = Math.max(1, Math.round(r.height * dpr));
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w:r.width, h:r.height};
+}
+
+function drawPriceChart(snap, hist){
+  const c = $('#priceChart');
+  const {ctx, w, h} = fitCanvas(c);
+  ctx.clearRect(0,0,w,h);
+  const ordered = snap.slice().sort((a,b)=>(b.liq||0)-(a.liq||0)).map(s=>s.symbol).slice(0,6);
+  const series = [];
+  const PALETTE = ['#5ee0ff','#ff2ec4','#3ee08a','#ffb84d','#a78bfa','#ff8fab'];
+  ordered.forEach((sym, i)=>{
+    const pts = hist.get(sym) || [];
+    if (pts.length < 2) return;
+    const base = pts[0].v; if (!base) return;
+    series.push({name:sym, color:PALETTE[i%PALETTE.length], points: pts.map(p=>({t:p.t, v:(p.v/base-1)*100}))});
+  });
+  const pad = {l:54, r:14, t:14, b:26};
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+  if (!series.length){ ctx.fillStyle='#7d8cc4'; ctx.font='12px monospace'; ctx.fillText('Not enough history.', pad.l, pad.t+18); return; }
+  const all = series.flatMap(s=>s.points);
+  const t0 = Math.min(...all.map(p=>p.t)), t1 = Math.max(...all.map(p=>p.t));
+  let vmin = Math.min(...all.map(p=>p.v), 0), vmax = Math.max(...all.map(p=>p.v), 0);
+  if (vmin===vmax){ vmin-=1; vmax+=1; }
+  const padV = (vmax-vmin)*0.12; vmin -= padV; vmax += padV;
+  const X = t => pad.l + (t1===t0?0.5:(t-t0)/(t1-t0))*iw;
+  const Y = v => pad.t + ih - ((v-vmin)/(vmax-vmin))*ih;
+  ctx.font='10px monospace'; ctx.textBaseline='middle';
+  for (let i=0;i<=4;i++){
+    const v = vmin + (vmax-vmin)*(i/4); const y = Y(v);
+    ctx.strokeStyle = Math.abs(v)<0.001 ? '#2b3a6d' : '#131a52';
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+    ctx.fillStyle='#7d8cc4'; ctx.textAlign='right'; ctx.fillText(v.toFixed(2)+'%', pad.l-8, y);
+  }
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for (let i=0;i<=3;i++){
+    const t = t0 + (t1-t0)*(i/3);
+    const d = new Date(t);
+    ctx.fillStyle='#7d8cc4'; ctx.fillText(d.toISOString().slice(11,16), X(t), pad.t+ih+7);
+  }
+  series.forEach(s=>{
+    ctx.strokeStyle = s.color; ctx.lineWidth = 1.6; ctx.lineJoin='round';
+    ctx.beginPath();
+    s.points.forEach((p,i)=>{ const x=X(p.t), y=Y(p.v); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+    ctx.stroke();
+    const last = s.points[s.points.length-1];
+    ctx.fillStyle = s.color;
+    ctx.beginPath(); ctx.arc(X(last.t), Y(last.v), 2.6, 0, Math.PI*2); ctx.fill();
+    ctx.font='10px monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(s.name, Math.min(X(last.t)+6, w-pad.r-52), Y(last.v));
+  });
+}
+
+function drawImpactChart(sim){
+  const c = $('#impactChart');
+  const {ctx, w, h} = fitCanvas(c);
+  ctx.clearRect(0,0,w,h);
+  if (!sim.length){ ctx.fillStyle='#7d8cc4'; ctx.font='12px monospace'; ctx.fillText('No sim_quotes.csv data.', 16, 26); return; }
+  const bySym = new Map();
+  for (const r of sim){
+    const imp = num(r.price_impact); if (imp == null) continue;
+    if (!bySym.has(r.symbol)) bySym.set(r.symbol, {sum:0, n:0});
+    const o = bySym.get(r.symbol); o.sum += imp; o.n++;
+  }
+  const items = Array.from(bySym, ([label,o])=>({label, value:o.sum/o.n, n:o.n})).sort((a,b)=>b.value-a.value);
+  const pad = {l:96, r:56, t:12, b:20};
+  const iw = w - pad.l - pad.r;
+  const rowH = Math.min(26, (h - pad.t - pad.b) / Math.max(items.length,1));
+  const max = Math.max(...items.map(i=>i.value), 0.0001);
+  items.forEach((it, i)=>{
+    const y = pad.t + i*rowH;
+    const bh = Math.max(6, rowH - 8);
+    const bw = (it.value/max)*iw;
+    ctx.fillStyle = '#0b1140';
+    ctx.fillRect(pad.l, y+2, iw, bh);
+    const grad = ctx.createLinearGradient(pad.l, 0, pad.l+iw, 0);
+    grad.addColorStop(0, '#5ee0ff');
+    grad.addColorStop(1, it.value > 0.8 ? '#ff4d6d' : '#3ee08a');
+    ctx.fill =Style = grad;
+    ctx.fillRect(pad.l, y+2, Math.max(2, bw), bh);
+    ctx.fillStyle = '#cfe0ff'; ctx.font='11px monospace';
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(it.label, pad.l-8, y+2+bh/2);
+    ctx.textAlign='left'; ctx.fillStyle='#7d8cc4';
+    ctx.fillText(it.value.toFixed(3)+'%', pad.l+bw+6, y+2+bh/2);
+  });
+}
+
+function renderSimTable(sim){
+  if (!sim.length){ $('#simTable').innerHTML = '<tbody><tr><td class="dim">No sim data</td></tr></tbody>'; return; }
+  const rows = sim.slice().sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+  const head = ['Time','Run','Symbol','SOL In','Out','Impact %','Fee bps','USD In','USD Out','Router'];
+  const body = rows.map(r=>{
+    const imp = num(r.price_impact);
+    return `<tr>
+      <td class="dim">${(r.timestamp||'').slice(11,19)}</td>
+      <td>${r.run}</td>
+      <td class="sym">${r.symbol}</td>
+      <td>${r.amount_sol}</td>
+      <td>${Number(r.out_amount).toLocaleString('en-US',{maximumFractionDigits:2})}</td>
+      <td class="${imp>0.8?'bad':imp>0.3?'warn':'good'}">${imp==null?'—':imp.toFixed(4)}</td>
+      <td>${r.fee_bps}</td>
+      <td>$${r.usd_in}</td>
+      <td>$${r.usd_out}</td>
+      <td class="dim">${r.router}</td>
+    </tr>`;
+  }).join('');
+  $('#simTable').innerHTML = `<thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody>`;
+  const routers = new Map();
+  rows.forEach(r => routers.set(r.router, (routers.get(r.router)||0)+1));
+  $('#simHint').textContent = `${rows.length} quotes · ` + Array.from(routers, ([k,v])=>`${k}:${v}`).join('  ');
+}
+
+function analyzeMarketFile(name, rows){
+  if (!rows) return {name, ok:false};
+  const cols = rows.length ? Object.keys(rows[0]) : [];
+  const nulls = {}; cols.forEach(c=>nulls[c]=0);
+  const seen = new Set(); let dup = 0;
+  const symbols = new Set(); const ts = [];
+  rows.forEach(r=>{
+    cols.forEach(c=>{ if (r[c]===''||r[c]==null) nulls[c]++; });
+    const k = (r.timestamp||'') + '|' + (r.symbol||'');
+    if (seen.has(k)) dup++; else seen.add(k);
+    if (r.symbol) symbols.add(r.symbol);
+    const t = new Date(r.timestamp).getTime();
+    if (Number.isFinite(t)) ts.push(t);
+  });
+  const cells = rows.length * cols.length || 1;
+  const nullCells = Object.values(nulls).reduce((a,b)=>a+b,0);
+  return {name, ok:true, rows:rows.length, cols:cols.length, symbols:symbols.size, dup,
+    nullPct: (nullCells/cells)*100, nulls,
+    tMin: ts.length ? Math.min(...ts) : null,
+    tMax: ts.length ? Math.max(...ts) : null,
+    hasSource: cols.includes('source')};
+}
+
+function renderDataQuality(){
+  const reports = [
+    analyzeMarketFile('market.csv', DATA['market.csv']),
+    analyzeMarketFile('market_clean.csv', DATA['market_clean.csv']),
+    analyzeMarketFile('market_original_corrupt.csv', DATA['market_original_corrupt.csv']),
+  ];
+  const head = ['File','Rows','Symbols','Cols','Null %','Duplicates','Source col','First','Last','Status'];
+  const body = reports.map(r=>{
+    if (!r.ok) return `<tr><td class="sym">${r.name}</td><td colspan="9" class="bad">not loaded</td></tr>`;
+    const status = r.dup > 0 || r.nullPct > 70 ? '<span class="warn">review</span>' : '<span class="good">ok</span>';
+    return `<tr>
+      <td class="sym">${r.name}</td>
+      <td>${r.rows}</td><td>${r.symbols}</td><td>${r.cols}</td>
+      <td class="${r.nullPct>70?'warn':''}">${r.nullPct.toFixed(1)}%</td>
+      <td class="${r.dup?'bad':''}">${r.dup}</td>
+      <td class="${r.hasSource?'good':'dim'}">${r.hasSource?'yes':'no'}</td>
+      <td class="dim">${fmtTime(r.tMin).slice(11)}</td>
+      <td class="dim">${fmtTime(r.tMax).slice(11)}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+  $('#dqTable').innerHTML = `<thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody>`;
+
+  const issues = [];
+  const m = reports[0], c = reports[1], k = reports[2];
+  if (c.ok && !c.hasSource) issues.push('market_clean.csv is missing the expected `source` column.');
+  if (c.ok && c.hasSource) issues.push('market_clean.csv adds a `source` column — good for provenance.', true);
+  if (k.ok && c.ok && k.rows !== c.rows) issues.push(`Row count mismatch: corrupt has ${k.rows} rows vs clean ${c.rows}.`);
+  if (k.ok && c.ok && k.tMax > c.tMax) issues.push(`market_clean.csv is truncated — ends at ${fmtTime(c.tMax)} but corrupt runs to ${fmtTime(k.tMax)}.`);
+  if (m.ok){
+    const sparse = Object.entries(m.nulls).filter(([col,n])=>n > m.rows*0.5).map(([col])=>col);
+    if (sparse.length) issues.push(`Sparse columns in market.csv (>50% empty): ${sparse.join(', ')}.`);
+  }
+  if (!issues.length) issues.push('No structural problems detected.', true);
+  $('#dqIssues').innerHTML = issues.map(i=>{
+    const ok typeof i === 'object' && i[1];
+    const text = ok ? i[0] : i;
+    return `<li class="${ok?'ok':''}">${text}</li>`;
+  }).join('');
+}
+
+/* ============ tabs ============ */
+$$('.tabs button').forEach(btn=>{
+  btn.onclick = ()=>{
+    $$('.tabs button').forEach(b=>b.classList.toggle('on', b===btn));
+    $$('.view').forEach(v=>v.classList.remove('active'));
+    $('#' + btn.dataset.tab + 'View').classList.add('active');
+    // redraw charts when switching to data tab
+    if (btn.dataset.tab === 'data'){
+      const key = $('#datasetSel').value;
+      const rows = normalizeMarket(DATA[key]);
+      const snap = snapshot(rows);
+      const hist = history(rows);
+      const sim = normalizeSim(DATA['sim_quotes.csv']);
+      setTimeout(()=>{
+        drawPriceChart(snap, hist);
+        drawImpactChart(sim);
+      }, 40);
+    } else {
+      drawCity(lastSnap);
+    }
+  };
+});
+
+/* ============ dataset selector ============ */
+function buildDatasetSelector(){
+  const sel = $('#datasetSel');
+  if (sel.options.length) return;
+  FILE_LIST.filter(f=>f!=='sim_quotes.csv').forEach(f=>{
+    const o = document.createElement('option');
+    o.value = f; o.textContent = f;
+    sel.appendChild(o);
+  });
+  sel.value = 'market.csv';
+  sel.onchange = ()=>rebuild();
+}
+
+/* ============ rebuild ============ */
+function rebuild(){
+  buildDatasetSelector();
+  const key = $('#datasetSel').value;
+  const rows = normalizeMarket(DATA[key]);
+  const snap = snapshot(rows);
+  const hist = history(rows);
+  const sim = normalizeSim(DATA['sim_quotes.csv']);
+  lastSnap = snap;
+
+  renderChips(snap, sim);
+  drawCity(snap);
+  renderMarketTable(snap, hist);
+  drawPriceChart(snap, hist);
+  drawImpactChart(sim);
+  renderSimTable(sim);
+  renderDataQuality();
+}
+
+/* ============ controls ============ */
+$('#btnReload').onclick = ()=>loadAll(true);
+$('#btnPresent').onclick = ()=>{
+  document.body.classList.toggle('present');
+  setTimeout(()=>{ drawCity(lastSnap); }, 60);
+};
+window.addEventListener('resize', ()=>{
+  const key = $('#datasetSel').value;
+  const rows = normalizeMarket(DATA[key]);
+  const snap = snapshot(rows);
+  const hist = history(rows);
+  const sim = normalizeSim(DATA['sim_quotes.csv']);
+  drawCity(snap);
+  drawPriceChart(snap, hist);
+  drawImpactChart(sim);
+});
+
+/* ============ boot ============ */
+buildDatasetSelector();
+loadAll(true);
+</script>
+</body>
+</html>
